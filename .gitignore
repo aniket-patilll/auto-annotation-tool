@@ -1,0 +1,135 @@
+# =============================================================================
+# KitchEye / YOLO World POC — .gitignore
+# =============================================================================
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.pyc
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+.env/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+*.coveragerc
+
+# mypy / pyright
+.mypy_cache/
+.pyright/
+
+# ── Environment & Secrets ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.yaml
+secrets.json
+
+# ── Database ──────────────────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── YOLO / ML Artefacts ───────────────────────────────────────────────────────
+# Trained model weights (usually large binary files — store with Git LFS if needed)
+*.pt
+*.onnx
+*.torchscript
+*.engine
+
+# YOLO training run outputs
+runs/
+yolo-prev-results/
+
+# ── Pipeline Job Outputs ──────────────────────────────────────────────────────
+# Auto-generated per-job output directories (can be reproduced from source videos)
+annotation_jobs/
+backend/outputs/
+
+# ── Dataset / Media ───────────────────────────────────────────────────────────
+# Raw & extracted video footage
+Test_Footage/
+videos/
+
+# Extracted / annotated training images and labels
+# (commit only small curated samples if needed, or use Git LFS)
+annotatted_classes/
+
+# ── Node.js / Next.js (frontend) ──────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.vercel/
+frontend/.turbo/
+.npm
+*.tsbuildinfo
+frontend/tsconfig.tsbuildinfo
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+# Keep docker-compose.yml but ignore any generated override files
+docker-compose.override.yml
+docker-compose.local.yml
+
+# ── OS & Editor Junk ──────────────────────────────────────────────────────────
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs
+.idea/
+*.iml
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ── Logs & Temp Files ─────────────────────────────────────────────────────────
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+logs/
+tmp/
+temp/
+
+# ── Miscellaneous ─────────────────────────────────────────────────────────────
+# Pipeline summary JSONs (auto-generated, not source)
+pipeline_summary.json
+
+# Large test artefacts from scratch runs
+extracted_frames/

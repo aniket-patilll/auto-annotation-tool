@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KitchEye &mdash; Food Detection AI</title>
+<meta name="description" content="KitchEye visual AI test interface for detecting fast food items using a custom-trained YOLOv8m model.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0c10;--surface:#111520;--surface2:#161b27;
+  --border:rgba(255,255,255,.07);--border-glow:rgba(99,179,237,.35);
+  --text:#e8edf5;--text-muted:#6b7892;
+  --accent:#63b3ed;--accent2:#9f7aea;
+  --success:#48bb78;--warn:#ed8936;--danger:#fc8181;
+}
+html{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+body{
+  min-height:100vh;background:var(--bg);
+  background-image:
+    radial-gradient(ellipse 80% 60% at 20% 10%,rgba(99,179,237,.05) 0%,transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 90%,rgba(159,122,234,.05) 0%,transparent 60%);
+}
+
+/* ---- Header ---- */
+header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:18px 32px;border-bottom:1px solid var(--border);
+  backdrop-filter:blur(12px);position:sticky;top:0;z-index:100;
+  background:rgba(10,12,16,.85);
+}
+.logo{display:flex;align-items:center;gap:12px}
+.logo-icon{
+  width:36px;height:36px;border-radius:10px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  display:flex;align-items:center;justify-content:center;font-size:18px;
+}
+.logo-text{font-size:20px;font-weight:700;letter-spacing:-.3px}
+.logo-text b{color:var(--accent);font-weight:700}
+
+#model-badge{
+  display:flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;
+  font-size:12px;font-weight:500;border:1px solid var(--border);
+  background:var(--surface);transition:all .3s;
+}
+#model-badge .dot{width:8px;height:8px;border-radius:50%;background:var(--text-muted);transition:background .3s}
+#model-badge.ready{border-color:rgba(72,187,120,.4)}
+#model-badge.ready .dot{background:var(--success);box-shadow:0 0 6px var(--success)}
+#model-badge.loading{border-color:rgba(237,137,54,.4)}
+#model-badge.loading .dot{background:var(--warn);animation:pulse 1s infinite}
+#model-badge.error{border-color:rgba(252,129,129,.4)}
+#model-badge.error .dot{background:var(--danger)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ---- Layout ---- */
+main{max-width:1280px;margin:0 auto;padding:40px 24px;display:grid;grid-template-columns:1fr 380px;gap:28px}
+@media(max-width:900px){main{grid-template-columns:1fr}}
+
+/* ---- Cards ---- */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(99,179,237,.03) 0%,transparent 60%);pointer-events:none}
+.card-title{font-size:13px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted);margin-bottom:18px;display:flex;align-items:center;gap:8px}
+.card-title .icon{font-size:16px}
+
+/* ---- Drop zone ---- */
+#drop-zone{
+  border:2px dashed var(--border);border-radius:12px;padding:48px 24px;
+  text-align:center;cursor:default;transition:all .25s;position:relative;
+}
+#drop-zone.drag-over{border-color:var(--accent);background:rgba(99,179,237,.04)}
+#drop-zone .upload-icon{font-size:40px;margin-bottom:12px;opacity:.6}
+#drop-zone h3{font-size:16px;font-weight:600;margin-bottom:6px}
+#drop-zone p{font-size:13px;color:var(--text-muted);margin-bottom:16px}
+.browse-btn{
+  display:inline-flex;align-items:center;gap:6px;padding:8px 18px;
+  border-radius:8px;border:1px solid var(--border);background:var(--surface2);
+  color:var(--accent);font-size:12px;font-weight:600;cursor:pointer;
+  transition:all .2s;font-family:inherit;
+}
+.browse-btn:hover{border-color:var(--accent);background:rgba(99,179,237,.08)}
+
+/* ---- Preview ---- */
+#canvas-wrap{position:relative;border-radius:12px;overflow:hidden;background:var(--surface2);min-height:240px;display:none;border:1px solid var(--border)}
+#preview-img{display:block;width:100%;border-radius:12px}
+#result-canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+
+/* ---- Buttons ---- */
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:10px 20px;border-radius:10px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;font-family:inherit}
+.btn-primary{background:linear-gradient(135deg,var(--accent),#4299e1);color:#000}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(99,179,237,.3)}
+.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+.btn-purple{background:linear-gradient(135deg,var(--accent2),#805ad5);color:#fff}
+.btn-purple:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(159,122,234,.3)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none!important;box-shadow:none!important}
+
+/* ---- Slider ---- */
+.slider-row{display:flex;align-items:center;gap:12px;margin-top:16px}
+.slider-row label{font-size:12px;color:var(--text-muted);white-space:nowrap}
+#conf-slider{flex:1;-webkit-appearance:none;height:4px;border-radius:2px;background:linear-gradient(to right,var(--accent) var(--val,25%),var(--border) var(--val,25%));outline:none}
+#conf-slider::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 0 3px rgba(99,179,237,.2)}
+#conf-val{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);min-width:34px;text-align:right}
+
+/* ---- Webcam ---- */
+#webcam-row{display:none}
+#webcam-video{width:100%;border-radius:12px;background:#000}
+
+/* ---- Spinner ---- */
+#spinner{display:none;align-items:center;justify-content:center;gap:12px;padding:24px;color:var(--text-muted);font-size:14px}
+.spin{width:22px;height:22px;border-radius:50%;border:2px solid var(--border);border-top-color:var(--accent);animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---- Sidebar ---- */
+.sidebar{display:flex;flex-direction:column;gap:20px}
+.class-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:11px;font-weight:600;margin:3px}
+.class-pill .swatch{width:8px;height:8px;border-radius:50%}
+
+/* ---- Detection items ---- */
+#detections-list{display:flex;flex-direction:column;gap:10px}
+.det-item{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;animation:slideIn .25s ease}
+@keyframes slideIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.det-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.det-label{font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.det-label .swatch{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.det-conf{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500}
+.det-bar{height:4px;border-radius:2px;background:var(--border);overflow:hidden}
+.det-bar-fill{height:100%;border-radius:2px;transition:width .4s ease}
+.det-bbox{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-muted);margin-top:6px}
+
+/* ---- Stats ---- */
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+.stat-row:last-child{border-bottom:none}
+.stat-label{font-size:12px;color:var(--text-muted)}
+.stat-val{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:500}
+
+/* ---- Toast ---- */
+#toast{position:fixed;bottom:24px;right:24px;z-index:999;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:500;background:var(--surface2);border:1px solid var(--border);box-shadow:0 8px 32px rgba(0,0,0,.4);transform:translateY(80px);opacity:0;transition:all .3s cubic-bezier(.34,1.56,.64,1)}
+#toast.show{transform:none;opacity:1}
+#toast.success{border-color:rgba(72,187,120,.5);color:var(--success)}
+#toast.error{border-color:rgba(252,129,129,.5);color:var(--danger)}
+</style>
+</head>
+<body>
+
+<!-- ============ HEADER ============ -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">&#x1F354;</div>
+    <div class="logo-text">Kitch<b>Eye</b></div>
+  </div>
+  <div id="model-badge" class="loading">
+    <div class="dot"></div>
+    <span id="badge-text">Checking model...</span>
+  </div>
+</header>
+
+<!-- ============ MAIN ============ -->
+<main>
+
+  <!-- LEFT COLUMN -->
+  <div style="display:flex;flex-direction:column;gap:20px">
+
+    <!-- Upload card -->
+    <div class="card">
+      <div class="card-title"><span class="icon">&#x1F4E4;</span> Upload Image or Video</div>
+
+      <!-- File input is completely hidden. Only the Browse button opens it. -->
+      <input type="file" id="file-input" accept="image/jpeg,image/png,video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm" style="display:none">
+
+      <div id="drop-zone">
+        <div class="upload-icon">&#x1F5BC;&#xFE0F;</div>
+        <h3 id="drop-label">Drop an image or video here</h3>
+        <p>JPG / PNG / MP4 / MOV &middot; max 100 MB</p>
+        <button type="button" class="browse-btn" id="btn-browse">&#x1F4C2; Browse File</button>
+      </div>
+
+      <div class="slider-row">
+        <label for="conf-slider">Confidence threshold</label>
+        <input id="conf-slider" type="range" min="5" max="95" value="25" step="5">
+        <span id="conf-val">25%</span>
+      </div>
+
+      <div class="controls">
+        <button type="button" class="btn btn-primary" id="btn-detect" disabled>&#x1F50D; Detect</button>
+        <button type="button" class="btn btn-secondary" id="btn-webcam">&#x1F4F7; Webcam</button>
+        <button type="button" class="btn btn-secondary" id="btn-clear" disabled>&#x1F5D1; Clear</button>
+      </div>
+    </div>
+
+    <!-- Webcam card -->
+    <div id="webcam-row" class="card">
+      <div class="card-title"><span class="icon">&#x1F3A5;</span> Webcam</div>
+      <video id="webcam-video" autoplay playsinline muted></video>
+      <div class="controls" style="margin-top:12px">
+        <button type="button" class="btn btn-purple" id="btn-snap">&#x1F4F8; Snap &amp; Detect</button>
+        <button type="button" class="btn btn-secondary" id="btn-stop-cam">&#x2715; Stop Camera</button>
+      </div>
+    </div>
+
+    <!-- Preview card -->
+    <div class="card" id="preview-card" style="display:none;padding:0;overflow:hidden">
+      <div id="canvas-wrap">
+        <img id="preview-img" alt="Preview">
+        <canvas id="result-canvas"></canvas>
+      </div>
+    </div>
+
+    <!-- Spinner -->
+    <div id="spinner"><div class="spin"></div> Running YOLOv8m inference...</div>
+
+  </div>
+
+  <!-- RIGHT COLUMN -->
+  <div class="sidebar">
+
+    <!-- Class legend -->
+    <div class="card">
+      <div class="card-title"><span class="icon">&#x1F3F7;&#xFE0F;</span> Detection Classes</div>
+      <div id="class-legend"></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="card">
+      <div class="card-title"><span class="icon">&#x1F4CA;</span> Session Stats</div>
+      <div class="stat-row"><span class="stat-label">Images analysed</span><span class="stat-val" id="stat-images">0</span></div>
+      <div class="stat-row"><span class="stat-label">Total detections</span><span class="stat-val" id="stat-dets">0</span></div>
+      <div class="stat-row"><span class="stat-label">Avg. confidence</span><span class="stat-val" id="stat-conf">&mdash;</span></div>
+      <div class="stat-row"><span class="stat-label">Inference time</span><span class="stat-val" id="stat-time">&mdash;</span></div>
+      <div class="stat-row"><span class="stat-label">Model</span><span class="stat-val" style="font-size:11px;color:var(--accent)">YOLOv8m (KitchEye)</span></div>
+    </div>
+
+    <!-- Detections -->
+    <div class="card" style="flex:1">
+      <div class="card-title"><span class="icon">&#x1F3AF;</span> Detections</div>
+      <div id="detections-list"></div>
+    </div>
+
+  </div>
+
+</main>
+
+<!-- Toast notification -->
+<div id="toast"></div>
+
+<!-- Hidden canvas used to capture webcam frames -->
+<canvas id="snap-canvas" style="display:none"></canvas>
+
+<!-- ============ JAVASCRIPT ============ -->
+<script>
+(function() {
+  "use strict";
+
+  // ---- Config ----
+  var API = "http://localhost:8000";
+  var CLASS_NAMES   = ["Main Bag","bag","curly_fries","dips","drink","egg_roll","fish_sandwich","french_fries","french_toast_stick","grilled_chicken_sandwich","grilled_sourdough_breakfast_sandwich","jumbo_cheeseburger","mozzarella_sticks","salad","slider_burger","spicy_chicken_burger","taco","the_cluck_sandwich"];
+  var CLASS_COLOURS = ["#ffd700","#90ee90","#ffa500","#da70d6","#00fa9a","#87ceeb","#ff6432","#00c8ff","#ffc800","#00ffc8","#b400ff","#ff3232","#32ff32","#ffb400","#0064ff","#ff00b4","#64ff00","#00b4ff"];
+
+  // ---- State ----
+  var currentFile  = null;
+  var webcamStream = null;
+  var sImages = 0, sDets = 0, sConfs = [];
+  var isVideo = false;
+  var videoId = null;
+  var videoExt = "";
+
+  // ---- DOM ----
+  var $ = function(id) { return document.getElementById(id); };
+  var fileInput    = $("file-input");
+  var btnBrowse    = $("btn-browse");
+  var dropZone     = $("drop-zone");
+  var dropLabel    = $("drop-label");
+  var confSlider   = $("conf-slider");
+  var confValEl    = $("conf-val");
+  var btnDetect    = $("btn-detect");
+  var btnClear     = $("btn-clear");
+  var btnWebcam    = $("btn-webcam");
+  var btnSnap      = $("btn-snap");
+  var btnStopCam   = $("btn-stop-cam");
+  var previewCard  = $("preview-card");
+  var canvasWrap   = $("canvas-wrap");
+  var previewImg   = $("preview-img");
+  var resultCanvas = $("result-canvas");
+  var spinner      = $("spinner");
+  var webcamRow    = $("webcam-row");
+  var webcamVideo  = $("webcam-video");
+  var snapCanvas   = $("snap-canvas");
+  var modelBadge   = $("model-badge");
+  var badgeText    = $("badge-text");
+  var toastEl      = $("toast");
+  var detList      = $("detections-list");
+  var statImages   = $("stat-images");
+  var statDets     = $("stat-dets");
+  var statConf     = $("stat-conf");
+  var statTime     = $("stat-time");
+  var legend       = $("class-legend");
+
+  // ---- Build class legend ----
+  CLASS_NAMES.forEach(function(cls, i) {
+    var c = CLASS_COLOURS[i];
+    var pill = document.createElement("span");
+    pill.className = "class-pill";
+    pill.style.background = c + "18";
+    pill.style.border = "1px solid " + c + "44";
+    pill.innerHTML = '<span class="swatch" style="background:' + c + '"></span>' + cls;
+    legend.appendChild(pill);
+  });
+
+  // ---- Show initial placeholder in detections ----
+  resetDetections();
+
+  // ---- Confidence slider ----
+  confSlider.addEventListener("input", function() {
+    confValEl.textContent = confSlider.value + "%";
+    confSlider.style.setProperty("--val", confSlider.value + "%");
+  });
+  confSlider.style.setProperty("--val", "25%");
+
+  // ---- Model status check ----
+  function checkModel() {
+    fetch(API + "/model-status")
+      .then(function(r) { if (!r.ok) throw new Error(); return r.json(); })
+      .then(function(d) {
+        if (d.trained_model_ready) {
+          modelBadge.className = "ready";
+          badgeText.textContent = "Model ready \u00b7 YOLOv8m";
+        } else {
+          modelBadge.className = "error";
+          badgeText.textContent = "Model not trained yet";
+        }
+      })
+      .catch(function() {
+        modelBadge.className = "error";
+        badgeText.textContent = "Backend offline";
+      });
+  }
+  checkModel();
+  setInterval(checkModel, 15000);
+
+  // ---- Browse button ----
+  btnBrowse.addEventListener("click", function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    fileInput.click();
+  });
+
+  // ---- File input change ----
+  fileInput.addEventListener("change", function() {
+    if (fileInput.files && fileInput.files[0]) {
+      loadFile(fileInput.files[0]);
+    }
+    // Reset so user can pick the same file again
+    fileInput.value = "";
+  });
+
+  // ---- Drag and drop ----
+  dropZone.addEventListener("dragover", function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.classList.add("drag-over");
+  });
+  dropZone.addEventListener("dragleave", function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.classList.remove("drag-over");
+  });
+  dropZone.addEventListener("drop", function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.classList.remove("drag-over");
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+      loadFile(e.dataTransfer.files[0]);
+    }
+  });
+
+  // ---- Load file into preview ----
+  function loadFile(file) {
+    if (!file) return;
+    
+    var isImg = /^image\/(jpeg|png)$/.test(file.type);
+    var isVid = /^video\/(mp4|quicktime|x-msvideo|x-matroska|webm)$/.test(file.type) || 
+                file.name.toLowerCase().endsWith('.mp4') || 
+                file.name.toLowerCase().endsWith('.mov') || 
+                file.name.toLowerCase().endsWith('.avi') || 
+                file.name.toLowerCase().endsWith('.mkv') || 
+                file.name.toLowerCase().endsWith('.webm');
+
+    if (!isImg && !isVid) {
+      showToast("Only JPG/PNG images or MP4/MOV/AVI/MKV/WEBM videos supported", "error");
+      return;
+    }
+    
+    if (isImg && file.size > 10 * 1024 * 1024) {
+      showToast("Image exceeds 10 MB limit", "error");
+      return;
+    }
+    if (isVid && file.size > 100 * 1024 * 1024) {
+      showToast("Video exceeds 100 MB limit", "error");
+      return;
+    }
+
+    currentFile = file;
+    isVideo = isVid;
+    videoId = null;
+    videoExt = "";
+
+    if (isImg) {
+      var url = URL.createObjectURL(file);
+      previewImg.onload = function() {
+        canvasWrap.style.display = "block";
+        previewCard.style.display = "block";
+        previewImg.style.opacity = "1";
+        resultCanvas.width  = previewImg.naturalWidth;
+        resultCanvas.height = previewImg.naturalHeight;
+        clearCanvas();
+      };
+      previewImg.src = url;
+      btnDetect.disabled = false;
+      btnClear.disabled  = false;
+      resetDetections();
+      dropLabel.textContent = file.name || "Image loaded";
+    } else {
+      canvasWrap.style.display = "none";
+      previewCard.style.display = "none";
+      previewImg.src = "";
+      btnDetect.disabled = false;
+      btnClear.disabled  = false;
+      resetDetections();
+      dropLabel.textContent = "Video: " + file.name + " (ready to process)";
+      showToast("Video loaded! Click Detect to process.", "success");
+    }
+  }
+
+  // ---- Detect button ----
+  btnDetect.addEventListener("click", function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (currentFile) runDetect(currentFile);
+  });
+
+  // ---- Run detection ----
+  function runDetect(blob) {
+    if (!blob) return;
+    setLoading(true);
+
+    if (isVideo) {
+      var fd = new FormData();
+      fd.append("video", blob, blob.name || "video.mp4");
+      
+      showToast("Uploading video...", "info");
+      
+      fetch(API + "/upload-video", { method: "POST", body: fd })
+        .then(function(res) {
+          if (!res.ok) {
+            return res.json().catch(function() { return {}; }).then(function(err) {
+              throw new Error(err.detail || "Video upload failed");
+            });
+          }
+          return res.json();
+        })
+        .then(function(data) {
+          videoId = data.video_id;
+          videoExt = data.ext;
+          
+          showToast("Video uploaded! Starting stream...", "success");
+          
+          var streamUrl = API + "/detect-video-stream?video_id=" + videoId + "&ext=" + videoExt + "&threshold=" + (parseFloat(confSlider.value) / 100).toFixed(2);
+          
+          canvasWrap.style.display = "block";
+          previewCard.style.display = "block";
+          previewImg.style.opacity = "1";
+          clearCanvas();
+          
+          detList.innerHTML = 
+            '<div style="text-align:center;padding:40px 20px;color:var(--text-muted);font-size:13px;display:flex;flex-direction:column;align-items:center;gap:12px">' +
+            '<div class="spin" style="width:30px;height:30px;border-width:3px"></div>' +
+            '<span>Streaming processed video... boxes are drawn in real-time.</span></div>';
+            
+          previewImg.onload = function() {
+            setLoading(false);
+          };
+          previewImg.onerror = function() {
+            showToast("Failed to load video stream", "error");
+            setLoading(false);
+          };
+          previewImg.src = streamUrl;
+        })
+        .catch(function(err) {
+          console.error("Video processing error:", err);
+          showToast(err.message || "Failed to process video", "error");
+          setLoading(false);
+        });
+    } else {
+      var fd = new FormData();
+      fd.append("image", blob, blob.name || "image.jpg");
+      fd.append("threshold", (parseFloat(confSlider.value) / 100).toFixed(2));
+
+      var t0 = performance.now();
+
+      fetch(API + "/detect-trained", { method: "POST", body: fd })
+        .then(function(res) {
+          if (res.status === 503) {
+            showToast("Trained model not ready", "error");
+            setLoading(false);
+            return null;
+          }
+          if (!res.ok) {
+            return res.json().catch(function() { return {}; }).then(function(err) {
+              showToast(err.detail || "Inference failed", "error");
+              setLoading(false);
+              return null;
+            });
+          }
+          return res.json();
+        })
+        .then(function(data) {
+          if (!data) return;
+          var elapsed = ((performance.now() - t0) / 1000).toFixed(2);
+
+          if (data.annotated_image_b64) {
+            var ann = new Image();
+            ann.onload = function() {
+              resultCanvas.width  = ann.naturalWidth;
+              resultCanvas.height = ann.naturalHeight;
+              previewImg.style.opacity = "0";
+              resultCanvas.getContext("2d").drawImage(ann, 0, 0);
+            };
+            ann.src = "data:image/jpeg;base64," + data.annotated_image_b64;
+          }
+
+          var dets = Array.isArray(data.detections) ? data.detections : [];
+          showDetections(dets);
+
+          sImages++;
+          sDets += dets.length;
+          dets.forEach(function(d) { sConfs.push(d.confidence); });
+          statImages.textContent = sImages;
+          statDets.textContent   = sDets;
+          statConf.textContent   = sConfs.length
+            ? (sConfs.reduce(function(a,b){return a+b;},0) / sConfs.length * 100).toFixed(1) + "%"
+            : "\u2014";
+          statTime.textContent = elapsed + "s";
+
+          showToast(dets.length + " detection(s) in " + elapsed + "s", "success");
+          setLoading(false);
+        })
+        .catch(function(err) {
+          console.error("Detection error:", err);
+          showToast("Cannot reach backend \u2014 is it running?", "error");
+          setLoading(false);
+        });
+    }
+  }
+
+  // ---- Show detection cards ----
+  function showDetections(dets) {
+    detList.innerHTML = "";
+    if (!dets || dets.length === 0) {
+      detList.innerHTML =
+        '<div style="text-align:center;padding:40px 20px;color:var(--text-muted);font-size:13px;display:flex;flex-direction:column;align-items:center;gap:12px">' +
+        '<span style="font-size:36px">&#x1F937;</span>' +
+        '<span>No items detected &mdash; try lowering the confidence threshold</span></div>';
+      return;
+    }
+    dets.slice().sort(function(a,b){return b.confidence - a.confidence;}).forEach(function(d) {
+      var idx = CLASS_NAMES.indexOf(d.label);
+      var col = idx >= 0 ? CLASS_COLOURS[idx] : "#aaa";
+      var pct = (d.confidence * 100).toFixed(1);
+      var bbox = Array.isArray(d.bbox) ? d.bbox.join(", ") : "\u2014";
+      var el = document.createElement("div");
+      el.className = "det-item";
+      el.style.borderLeft = "3px solid " + col;
+      el.innerHTML =
+        '<div class="det-header">' +
+        '<div class="det-label"><span class="swatch" style="background:' + col + '"></span> ' + d.label + '</div>' +
+        '<span class="det-conf" style="color:' + col + '">' + pct + '%</span>' +
+        '</div>' +
+        '<div class="det-bar"><div class="det-bar-fill" style="width:' + pct + '%;background:' + col + '"></div></div>' +
+        '<div class="det-bbox">bbox: [' + bbox + ']</div>';
+      detList.appendChild(el);
+    });
+  }
+
+  function resetDetections() {
+    detList.innerHTML =
+      '<div style="text-align:center;padding:40px 20px;color:var(--text-muted);font-size:13px;display:flex;flex-direction:column;align-items:center;gap:12px">' +
+      '<span style="font-size:36px">&#x1F50D;</span>' +
+      '<span>Upload an image/video and hit <strong>Detect</strong> to see results</span></div>';
+  }
+
+  // ---- Clear button ----
+  btnClear.addEventListener("click", function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    currentFile = null;
+    isVideo = false;
+    videoId = null;
+    videoExt = "";
+    previewCard.style.display = "none";
+    canvasWrap.style.display  = "none";
+    previewImg.src = "";
+    previewImg.style.opacity = "1";
+    btnDetect.disabled = true;
+    btnClear.disabled  = true;
+    clearCanvas();
+    resetDetections();
+    dropLabel.textContent = "Drop an image or video here";
+  });
+
+  function clearCanvas() {
+    resultCanvas.getContext("2d").clearRect(0, 0, resultCanvas.width, resultCanvas.height);
+  }
+
+  // ---- Webcam ----
+  btnWebcam.addEventListener("click", function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(function(stream) {
+        webcamStream = stream;
+        webcamVideo.srcObject = stream;
+        webcamRow.style.display = "block";
+        btnWebcam.disabled = true;
+      })
+      .catch(function() {
+        showToast("Camera permission denied", "error");
+      });
+  });
+
+  btnStopCam.addEventListener("click", function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    stopCam();
+  });
+
+  function stopCam() {
+    if (webcamStream) {
+      webcamStream.getTracks().forEach(function(t) { t.stop(); });
+      webcamStream = null;
+    }
+    webcamVideo.srcObject = null;
+    webcamRow.style.display = "none";
+    btnWebcam.disabled = false;
+  }
+
+  btnSnap.addEventListener("click", function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!webcamStream) return;
+    snapCanvas.width  = webcamVideo.videoWidth;
+    snapCanvas.height = webcamVideo.videoHeight;
+    snapCanvas.getContext("2d").drawImage(webcamVideo, 0, 0);
+    snapCanvas.toBlob(function(blob) {
+      if (!blob) { showToast("Failed to capture frame", "error"); return; }
+      blob.name = "webcam_snap.jpg";
+      var url = URL.createObjectURL(blob);
+      previewImg.onload = function() {
+        resultCanvas.width  = previewImg.naturalWidth;
+        resultCanvas.height = previewImg.naturalHeight;
+        canvasWrap.style.display = "block";
+        previewCard.style.display = "block";
+        previewImg.style.opacity = "1";
+        clearCanvas();
+      };
+      previewImg.src = url;
+      currentFile = blob;
+      btnDetect.disabled = false;
+      btnClear.disabled  = false;
+      resetDetections();
+      runDetect(blob);
+    }, "image/jpeg", 0.92);
+  });
+
+  // ---- Helpers ----
+  function setLoading(v) {
+    spinner.style.display = v ? "flex" : "none";
+    btnDetect.disabled = v || !currentFile;
+    if (v) {
+      spinner.innerHTML = isVideo ? 
+        '<div class="spin"></div> Processing &amp; streaming video...' : 
+        '<div class="spin"></div> Running YOLOv8m inference...';
+    }
+  }
+
+  var toastTimer = null;
+  function showToast(msg, type) {
+    toastEl.textContent = msg;
+    toastEl.className = "show " + (type || "");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function() { toastEl.className = type || ""; }, 3500);
+  }
+
+})();
+</script>
+</body>
+</html>
