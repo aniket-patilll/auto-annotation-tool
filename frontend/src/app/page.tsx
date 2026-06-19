@@ -101,12 +101,14 @@ export default function Home() {
     setter: (val: string) => void,
     currentValue: string,
     mode: 'folder' | 'file',
-    fileTypes?: string
+    fileTypes?: string,
+    multiselect?: boolean
   ) {
     const qs = new URLSearchParams({
       mode,
       start: currentValue,
-      file_types: fileTypes || ''
+      file_types: fileTypes || '',
+      multiselect: multiselect ? 'true' : 'false'
     })
     try {
       const r = await fetch(`/api/browse?${qs.toString()}`)
@@ -165,44 +167,78 @@ export default function Home() {
   }
 
   async function submit() {
-    const fd = new FormData()
     if (tab === 'existing') {
       if (!existingPath.trim()) { alert('Enter pipeline output path'); return }
+      const fd = new FormData()
       fd.append('existing_output', existingPath)
+      setRunning(true); setLogs([]); logOffsetRef.current = 0; setJobStatus('running')
+      const r = await fetch('/api/jobs', { method: 'POST', body: fd })
+      if (!r.ok) { alert(await r.text()); setRunning(false); return }
+      const { job_id } = await r.json()
+      setActiveId(job_id)
+      fetchJobs()
     } else {
-      if (inputMode === 'upload') {
-        const f = fileRef.current?.files?.[0]
-        if (!f) { alert('Select a file'); return }
-        fd.append('video', f)
-      } else if (inputMode === 'image') {
-        const f = imageRef.current?.files?.[0]
-        if (!f) { alert('Select an image'); return }
-        fd.append('image', f)
-      } else if (inputMode === 'video_path') {
+      let paths: string[] = []
+      if (inputMode === 'video_path') {
         if (!videoPath.trim()) { alert('Enter video path'); return }
-        fd.append('video_path', videoPath)
+        paths = videoPath.split(';').map(p => p.trim()).filter(p => p.length > 0)
       } else {
-        if (!imagesPath.trim()) { alert('Enter images directory'); return }
-        fd.append('images_path', imagesPath)
+        paths = ['']
       }
-      fd.append('classes', labeler === 'yolo' ? (classes || 'placeholder') : classes)
-      fd.append('labeler', labeler)
-      fd.append('yolo_model', yoloModel)
-      fd.append('roboflow_model_id', roboflowModelId)
-      fd.append('conf', conf)
-      fd.append('fps', fps)
-      fd.append('device', device)
-      fd.append('skip_training', skipTrain ? 'true' : 'false')
-      fd.append('skip_filter', (skipFilter || inputMode === 'images_path' || inputMode === 'image') ? 'true' : 'false')
-      fd.append('output_dir_override', outputOverride)
-    }
 
-    setRunning(true); setLogs([]); logOffsetRef.current = 0; setJobStatus('running')
-    const r = await fetch('/api/jobs', { method: 'POST', body: fd })
-    if (!r.ok) { alert(await r.text()); setRunning(false); return }
-    const { job_id } = await r.json()
-    setActiveId(job_id)
-    fetchJobs()
+      setRunning(true); setLogs([]); logOffsetRef.current = 0; setJobStatus('running')
+      
+      let lastJobId: string | null = null
+      
+      for (const currentPath of paths) {
+        const fd = new FormData()
+        if (inputMode === 'upload') {
+          const f = fileRef.current?.files?.[0]
+          if (!f) { alert('Select a file'); setRunning(false); return }
+          fd.append('video', f)
+        } else if (inputMode === 'image') {
+          const f = imageRef.current?.files?.[0]
+          if (!f) { alert('Select an image'); setRunning(false); return }
+          fd.append('image', f)
+        } else if (inputMode === 'video_path') {
+          fd.append('video_path', currentPath)
+        } else {
+          if (!imagesPath.trim()) { alert('Enter images directory'); setRunning(false); return }
+          fd.append('images_path', imagesPath)
+        }
+        
+        fd.append('classes', labeler === 'yolo' ? (classes || 'placeholder') : classes)
+        fd.append('labeler', labeler)
+        fd.append('yolo_model', yoloModel)
+        fd.append('roboflow_model_id', roboflowModelId)
+        fd.append('conf', conf)
+        fd.append('fps', fps)
+        fd.append('device', device)
+        fd.append('skip_training', skipTrain ? 'true' : 'false')
+        fd.append('skip_filter', (skipFilter || inputMode === 'images_path' || inputMode === 'image') ? 'true' : 'false')
+        fd.append('output_dir_override', outputOverride)
+
+        try {
+          const r = await fetch('/api/jobs', { method: 'POST', body: fd })
+          if (!r.ok) {
+            alert(`Error submitting path "${currentPath}": ` + (await r.text()))
+            continue
+          }
+          const { job_id } = await r.json()
+          lastJobId = job_id
+        } catch (err) {
+          console.error(err)
+          alert(`Failed to submit job for "${currentPath}"`)
+        }
+      }
+
+      if (lastJobId) {
+        setActiveId(lastJobId)
+      } else {
+        setRunning(false)
+      }
+      fetchJobs()
+    }
   }
 
   const statusCls = (s: string) =>
@@ -310,13 +346,13 @@ export default function Home() {
 
                 {inputMode === 'video_path' && (
                   <div className="space-y-2">
-                    <label className="block text-[10px] text-slate-400 uppercase tracking-widest font-bold">Local Video file path</label>
+                    <label className="block text-[10px] text-slate-400 uppercase tracking-widest font-bold">Local Video file path(s)</label>
                     <div className="flex gap-2">
                       <input value={videoPath} onChange={e => setVideoPath(e.target.value)}
                         className="flex-1 bg-[#05050a] border border-[#1e2035] rounded-xl px-4 py-2.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500 font-mono"
-                        placeholder="D:\yolo_world_poc\videos\kitchen_feed.mp4" />
+                        placeholder="Select one or more videos (semicolon separated)" />
                       <button
-                        onClick={() => handleBrowse(setVideoPath, videoPath, 'file', 'mp4,avi,mkv,mov')}
+                        onClick={() => handleBrowse(setVideoPath, videoPath, 'file', 'mp4,avi,mkv,mov', true)}
                         type="button"
                         className="bg-[#18182b] hover:bg-[#20203a] text-slate-300 border border-[#1e2035] px-3.5 rounded-xl text-xs font-medium transition-all duration-150 whitespace-nowrap">
                         Browse

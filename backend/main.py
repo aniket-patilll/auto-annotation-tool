@@ -414,7 +414,7 @@ def update_settings(body: dict):
 
 
 @app.get("/api/browse")
-def browse(mode: str = "folder", start: str = "", file_types: str = ""):
+def browse(mode: str = "folder", start: str = "", file_types: str = "", multiselect: bool = False):
     import tkinter as tk
     from tkinter import filedialog
     import threading
@@ -445,17 +445,27 @@ def browse(mode: str = "folder", start: str = "", file_types: str = ""):
                     filetypes_arg.append(("Supported Files", " ".join(exts)))
                 filetypes_arg.append(("All Files", "*.*"))
                 
-                path = filedialog.askopenfilename(
-                    initialdir=initial or str(ROOT),
-                    title="Select File",
-                    filetypes=filetypes_arg
-                )
+                if multiselect:
+                    paths = filedialog.askopenfilenames(
+                        initialdir=initial or str(ROOT),
+                        title="Select File(s)",
+                        filetypes=filetypes_arg
+                    )
+                    # Join multiple paths with a semicolon
+                    result["path"] = ";".join(paths) if paths else ""
+                else:
+                    path = filedialog.askopenfilename(
+                        initialdir=initial or str(ROOT),
+                        title="Select File",
+                        filetypes=filetypes_arg
+                    )
+                    result["path"] = path
             else:
                 path = filedialog.askdirectory(
                     initialdir=initial or str(ROOT),
                     title="Select Directory"
                 )
-            result["path"] = path
+                result["path"] = path
             root.destroy()
         except Exception as e:
             # Fallback to PowerShell
@@ -467,14 +477,18 @@ def browse(mode: str = "folder", start: str = "", file_types: str = ""):
                     exts = ";".join([f"*.{ext.strip().strip('.')}" for ext in file_types.split(",")])
                     filter_str = f"Supported Files ({exts})|{exts}|All Files (*.*)|*.*"
                 
+                multiselect_flag = "$d.Multiselect = $true; " if multiselect else ""
+                filename_expr = "([string]::Join(';', $d.FileNames))" if multiselect else "$d.FileName"
+                
                 cmd = (
                     "[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null; "
                     "$d = New-Object System.Windows.Forms.OpenFileDialog; "
-                    "$d.Title = 'Select File'; "
+                    "$d.Title = 'Select File(s)'; "
+                    f"{multiselect_flag}"
                     f"$d.Filter = '{filter_str}'; "
                     f"$d.InitialDirectory = '{sanitized_start}'; "
                     "$d.ShowDialog() | Out-Null; "
-                    "$d.FileName"
+                    f"{filename_expr}"
                 )
             else:
                 cmd = (
