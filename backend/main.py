@@ -177,6 +177,12 @@ def delete_job(job_id: str):
     db.delete_job(job_id)
 
 
+@app.delete("/api/jobs", status_code=204)
+def delete_all_jobs():
+    db.delete_all_jobs()
+
+
+
 # ── Review ────────────────────────────────────────────────────────────────────
 
 def _load_class_names(out_dir: Path) -> list[str]:

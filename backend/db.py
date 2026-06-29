@@ -158,3 +158,10 @@ def delete_job(job_id: str):
     with _conn() as c:
         c.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
         c.commit()
+
+
+def delete_all_jobs():
+    with _conn() as c:
+        c.execute("DELETE FROM jobs")
+        c.commit()
+

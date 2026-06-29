@@ -148,7 +148,6 @@ export default function Home() {
 
   async function deleteJob(id: string, e: React.MouseEvent) {
     e.stopPropagation()
-    if (!confirm('Are you sure you want to delete this job? This will remove it from the database.')) return
     try {
       const r = await fetch(`/api/jobs/${id}`, { method: 'DELETE' })
       if (r.ok) {
@@ -165,6 +164,24 @@ export default function Home() {
       alert('Error deleting job')
     }
   }
+
+  async function deleteAllJobs() {
+    if (!confirm('Are you sure you want to delete all jobs? This will permanently remove all jobs from the database.')) return
+    try {
+      const r = await fetch('/api/jobs', { method: 'DELETE' })
+      if (r.ok) {
+        setActiveId(null)
+        setLogs([])
+        fetchJobs()
+      } else {
+        alert('Failed to delete all jobs')
+      }
+    } catch (err) {
+      console.error(err)
+      alert('Error deleting all jobs')
+    }
+  }
+
 
   async function submit() {
     if (tab === 'existing') {
@@ -612,10 +629,24 @@ export default function Home() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-extrabold uppercase tracking-widest text-slate-400">Annotation Jobs</h2>
-            <span className="text-[10px] text-slate-500 font-bold bg-[#13131f] px-2.5 py-1 rounded border border-[#1e2035] shadow-sm">
-              Auto-Refreshes
-            </span>
+            <div className="flex items-center gap-2">
+              {jobs.length > 0 && (
+                <button
+                  onClick={deleteAllJobs}
+                  className="text-[10px] text-rose-400 hover:text-rose-300 font-bold bg-[#1f1313] hover:bg-[#2b1616] px-2.5 py-1 rounded border border-rose-950/60 shadow-sm transition-all duration-150 flex items-center gap-1"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Delete All Jobs
+                </button>
+              )}
+              <span className="text-[10px] text-slate-500 font-bold bg-[#13131f] px-2.5 py-1 rounded border border-[#1e2035] shadow-sm">
+                Auto-Refreshes
+              </span>
+            </div>
           </div>
+
 
           {jobs.length === 0 ? (
             <div className="bg-[#0d0d16]/90 border border-[#1e2035]/60 rounded-2xl p-8 text-center shadow-lg shadow-black/20">
